@@ -3,7 +3,7 @@ obj-m	+= can.o
 can-y	:= patched/af_can.o patched/proc.o
 
 obj-m	+= can-isobus.o
-can-isobus-y	:= isobus.o
+can-isobus-y	:= isobus.o transport.o
 
 ifdef BUILD_NUM
 	ccflags-y += -DBUILD_NUM='"$(BUILD_NUM)"'

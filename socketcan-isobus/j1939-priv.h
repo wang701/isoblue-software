@@ -16,11 +16,11 @@
 #include <net/sock.h>
 
 #include <linux/seq_file.h>
-#include <linux/proc_fs.h>
 #include <linux/module.h>
-#include <linux/can/j1939.h>
 #include <linux/atomic.h>
 #include <linux/interrupt.h>
+
+#include "isobus.h"
 
 /* TODO: return ENETRESET on busoff. */
 
@@ -128,11 +128,6 @@ static inline int j1939_to_sk_priority(int j1939_prio)
 	return 7 - j1939_prio;
 }
 
-static inline int j1939_address_is_valid(uint8_t sa)
-{
-	return sa != J1939_NO_ADDR;
-}
-
 static inline int j1939_address_is_unicast(uint8_t sa)
 {
 	return sa <= SA_MAX_UNICAST;
@@ -177,12 +172,6 @@ extern struct j1939_ecu *j1939_ecu_find_segment_default_tx(
 extern void j1939_put_promisc_receiver(int ifindex);
 extern void j1939_get_promisc_receiver(int ifindex);
 
-extern int j1939_proc_add(const char *file,
-		int (*seq_show)(struct seq_file *sqf, void *v),
-		write_proc_t write);
-extern void j1939_proc_remove(const char *file);
-
-extern const char j1939_procname[];
 /* j1939 printk */
 #define j1939_printk(level, ...) printk(level "J1939 " __VA_ARGS__)
 
@@ -201,7 +190,7 @@ struct sk_buff;
 /* control buffer of the sk_buff */
 struct j1939_sk_buff_cb {
 	int ifindex;
-	priority_t priority;
+	__u8 priority;
 	struct {
 		name_t name;
 		uint8_t addr;

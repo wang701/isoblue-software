@@ -1324,88 +1324,6 @@ static int j1939tp_notifier(struct notifier_block *nb,
 	return NOTIFY_DONE;
 }
 
-/* SYSCTL */
-static struct ctl_table_header *j1939tp_table_header;
-
-static int min_block = 1;
-static int max_block = 255;
-static int min_packet = 8;
-static int max_packet = ((2 << 24)-1)*7;
-
-static int min_retry = 5;
-static int max_retry = 5000;
-
-static ctl_table j1939tp_table[] = {
-	{
-		.procname	= "transport_cts_nr_of_frames",
-		.data		= &block,
-		.maxlen		= sizeof(block),
-		.mode		= 0644,
-		.proc_handler	= &proc_dointvec_minmax,
-		.extra1		= &min_block,
-		.extra2		= &max_block,
-	},
-	{
-		.procname	= "transport_max_payload_in_bytes",
-		.data		= &max_packet_size,
-		.maxlen		= sizeof(max_packet_size),
-		.mode		= 0644,
-		.proc_handler	= &proc_dointvec_minmax,
-		.extra1		= &min_packet,
-		.extra2		= &max_packet,
-	},
-	{
-		.procname	= "transport_tx_retry_ms",
-		.data		= &retry_ms,
-		.maxlen		= sizeof(retry_ms),
-		.mode		= 0644,
-		.proc_handler	= &proc_dointvec_minmax,
-		.extra1		= &min_retry,
-		.extra2		= &max_retry,
-	},
-	{ },
-};
-
-static struct ctl_path j1939tp_path[] = {
-	{ .procname = "net", },
-	{ .procname = j1939_procname, },
-	{ }
-};
-
-/* PROC */
-static int j1939tp_proc_show_session(struct seq_file *sqf,
-		struct session *session)
-{
-	seq_printf(sqf, "%i", session->cb->ifindex);
-	if (session->cb->src.name)
-		seq_printf(sqf, "\t%016llx", session->cb->src.name);
-	else
-		seq_printf(sqf, "\t%02x", session->cb->src.addr);
-	if (session->cb->dst.name)
-		seq_printf(sqf, "\t%016llx", session->cb->dst.name);
-	else if (j1939_address_is_unicast(session->cb->dst.addr))
-		seq_printf(sqf, "\t%02x", session->cb->dst.addr);
-	else
-		seq_printf(sqf, "\t-");
-	seq_printf(sqf, "\t%05x\t%u/%u\n", session->cb->pgn,
-			session->pkt.done*7, session->skb->len);
-	return 0;
-}
-
-static int j1939tp_proc_show(struct seq_file *sqf, void *v)
-{
-	struct session *session;
-
-	seq_printf(sqf, "iface\tsrc\tdst\tpgn\tdone/total\n");
-	sessionlist_lock();
-	list_for_each_entry(session, &s.sessionq, list)
-		j1939tp_proc_show_session(sqf, session);
-	list_for_each_entry(session, &s.extsessionq, list)
-		j1939tp_proc_show_session(sqf, session);
-	sessionlist_unlock();
-	return 0;
-}
-
 int __init j1939tp_module_init(void)
 {
 	spin_lock_init(&s.lock);
@@ -1418,9 +1336,6 @@ int __init j1939tp_module_init(void)
 	s.notifier.notifier_call = j1939tp_notifier;
 	register_netdevice_notifier(&s.notifier);
 
-	j1939_proc_add("transport", j1939tp_proc_show, NULL);
-	j1939tp_table_header =
-		register_sysctl_paths(j1939tp_path, j1939tp_table);
 	init_waitqueue_head(&s.wait);
 	return 0;
 }
@@ -1431,9 +1346,7 @@ void j1939tp_module_exit(void)
 
 	wake_up_all(&s.wait);
 
-	unregister_sysctl_table(j1939tp_table_header);
 	unregister_netdevice_notifier(&s.notifier);
-	j1939_proc_remove("transport");
 	sessionlist_lock();
 	list_for_each_entry_safe(session, saved, &s.extsessionq, list) {
 		list_del_init(&session->list);
