@@ -51,6 +51,7 @@
 #include "../socketcan-isobus/isobus.h"
 
 #include "ring_buf.h"
+#include "mesg_db.h"
 
 enum opcode {
 	SET_FILTERS = 'F',
@@ -249,7 +250,8 @@ static inline char nib2hex(uint_fast8_t nib)
 }
 
 /* Function to handle incoming ISOBUS message(s) */
-static inline int read_func(int sock, int iface, struct ring_buffer *buf)
+static inline int read_func(int sock, int iface, struct ring_buffer *buf,
+		mesg_db *db)
 {
 	/* Construct msghdr to use to recevie messages from socket */
 	static struct isobus_mesg mes;
@@ -327,6 +329,10 @@ static inline int read_func(int sock, int iface, struct ring_buffer *buf)
 	//*(cp++) = '\0';
 
 	ring_buffer_tail_advance(buf, cp-sp);
+
+	/* Put message in database */
+	mesg_db_insert(db, &mes, iface, addr.can_addr.isobus.addr,
+			daddr.can_addr.isobus.addr, &tv);
 
 	return 1;
 }
@@ -499,7 +505,7 @@ static inline int command_func(int rc, struct ring_buffer *buf, int *s)
 
 /* Function that does all the work after initialization */
 static inline void loop_func(int n_fds, fd_set read_fds, fd_set write_fds,
-		struct ring_buffer buf, int *s, int ns, int bt)
+		struct ring_buffer *buf, mesg_db *db, int *s, int ns, int bt)
 {
 	int rc = -1;
 
@@ -516,14 +522,14 @@ static inline void loop_func(int n_fds, fd_set read_fds, fd_set write_fds,
 				continue;
 			}
 
-			read_func(s[i], i, &buf);
+			read_func(s[i], i, buf, db);
 		}
 
 		/* Check RFCOMM connection */
 		if(rc > 0) {
 			/* Read RFCOMM */
 			if(FD_ISSET(rc, &tmp_rfds)) {
-				if(command_func(rc, &buf, s) < 0) {
+				if(command_func(rc, buf, s) < 0) {
 					FD_CLR(rc, &read_fds);
 					FD_CLR(rc, &write_fds);
 					FD_SET(bt, &read_fds);
@@ -535,7 +541,7 @@ static inline void loop_func(int n_fds, fd_set read_fds, fd_set write_fds,
 
 			/* Write RFCOMM */
 			if(FD_ISSET(rc, &tmp_wfds)) {
-				if(send_func(rc, &buf) < 0) {
+				if(send_func(rc, buf) < 0) {
 					FD_CLR(rc, &read_fds);
 					FD_CLR(rc, &write_fds);
 					FD_SET(bt, &read_fds);
@@ -546,7 +552,7 @@ static inline void loop_func(int n_fds, fd_set read_fds, fd_set write_fds,
 			}
 
 			/* Check send buffer */
-			check_send(&buf, rc, &write_fds);
+			check_send(buf, rc, &write_fds);
 		} else {
 			/* Accept Bluetooth connection */
 			if(FD_ISSET(bt, &tmp_rfds)) {
@@ -593,6 +599,7 @@ int main(int argc, char *argv[]) {
 	FD_ZERO(&write_fds);
 	n_fds = 0;
 
+	/* Initialize Bluetooth */
 	if((bt = socket(PF_BLUETOOTH, SOCK_STREAM | SOCK_NONBLOCK, BTPROTO_RFCOMM))
 			< 0) {
 		perror("socket (bt)");
@@ -613,10 +620,15 @@ int main(int argc, char *argv[]) {
 	}
 	FD_SET(bt, &read_fds);
 	n_fds = bt > n_fds ? bt : n_fds;
-
 	session = register_service(rc_addr.rc_channel);
 
+	/* Initialize buffer */
 	ring_buffer_create(&buf, 20 + arguments.buf_order, arguments.file);
+
+	/* Initialize database */
+	mesg_db *db = NULL;
+	if(!(db = mesg_db_init()))
+		fprintf(stderr, "Failed to connect to database.");
 
 	/* Initialize ISOBUS sockets */
 	int i;
@@ -653,7 +665,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* Do socket stuff */
-	loop_func(n_fds, read_fds, write_fds, buf, s, ns, bt);
+	loop_func(n_fds, read_fds, write_fds, &buf, db, s, ns, bt);
 
 	sdp_close(session);
 
