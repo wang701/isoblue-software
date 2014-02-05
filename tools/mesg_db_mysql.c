@@ -40,7 +40,7 @@
 
 #define QUERY	"INSERT INTO isobus_messages " \
 	"(pgn, data, src, dest, bus, sec, usec) " \
-	"VALUES (?,?,?,?,?,?)"
+	"VALUES (?,?,?,?,?,?,?)"
 
 
 struct db_info {
@@ -82,9 +82,8 @@ mesg_db *mesg_db_init(void) {
 	/* Initialize prepared statement */
 	db->stmt = mysql_stmt_init(db->conn);
 	mysql_stmt_prepare(db->stmt, QUERY, strlen(QUERY));
-	mysql_stmt_bind_param(db->stmt, db->params);
 
-	return (mesg_db) db;
+	return (mesg_db *) db;
 }
 
 int mesg_db_insert(mesg_db *db, struct isobus_mesg *mesg, int iface, __u8 src,
@@ -106,6 +105,8 @@ int mesg_db_insert(mesg_db *db, struct isobus_mesg *mesg, int iface, __u8 src,
 	info->params[5].buffer = &ts->tv_sec;
 	/* Fill in usec */
 	info->params[6].buffer = &ts->tv_usec;
+
+	mysql_stmt_bind_param(info->stmt, info->params);
 
 	return mysql_stmt_execute(info->stmt);
 }
