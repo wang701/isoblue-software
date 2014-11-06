@@ -413,31 +413,35 @@ void *http_worker(void *stuff) {
 		ring_buffer_clear(&buf);
 		db_iter = leveldb_create_iterator(db, db_roptions);
 		leveldb_iter_seek(db_iter, (char *)&http_id, sizeof(db_key_t));
-		sp = cp = ring_buffer_tail_address(&buf);
-		*(cp++) = '[';
-		ring_buffer_tail_advance(&buf, 1);
-		while(leveldb_iter_valid(db_iter)) {
-			char *val;
-			size_t len;
+		if(leveldb_iter_valid(db_iter)) {
+			sp = cp = ring_buffer_tail_address(&buf);
 
-			val = (char *)leveldb_iter_value(db_iter, &len);
-			if(len >= ring_buffer_free_bytes(&buf)) {
-				break;
-			}
-			memcpy(cp, val, len);
-			cp += len;
+			*(cp++) = '[';
+			ring_buffer_tail_advance(&buf, 1);
+			do {
+				char *val;
+				size_t len;
 
-			leveldb_iter_next(db_iter);
-			*(cp++) = ',';
-			ring_buffer_tail_advance(&buf, len + 1);
-			http_id++;
+				val = (char *)leveldb_iter_value(db_iter, &len);
+				if(len >= ring_buffer_free_bytes(&buf)) {
+					break;
+				}
+				memcpy(cp, val, len);
+				cp += len;
+
+				leveldb_iter_next(db_iter);
+				*(cp++) = ',';
+				ring_buffer_tail_advance(&buf, len + 1);
+				http_id++;
+			} while(leveldb_iter_valid(db_iter));
+			*(cp-1) = ']';
+			ring_buffer_tail_advance(&buf, 1);
+
+			curl_easy_setopt(curl, CURLOPT_POSTFIELDS, sp);
+			curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cp - sp);
+			while(curl_easy_perform(curl) != CURLE_OK);
 		}
-		*(cp-1) = ']';
-		ring_buffer_tail_advance(&buf, 1);
 
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, sp);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cp - sp);
-		while(curl_easy_perform(curl) != CURLE_OK);
 		leveldb_iter_destroy(db_iter);
 	}
 
@@ -534,7 +538,7 @@ int main(int argc, char *argv[]) {
 		db_id = *(db_key_t *)read;
 	}
 	printf("starting at db id %d.\n", db_id);
-	http_id = db_id - 1;
+	http_id = db_id;
 
 	/* Start HTTP thread */
 	pthread_t http_thread;
