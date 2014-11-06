@@ -26,4 +26,8 @@ install_% : %
 
 .PHONY : clean
 clean ::
+	-$(RM) *.o
+
+.PHONY : distclean
+distclean ::
 	-$(RM) $(TOOLS) $(TEST) *.o
