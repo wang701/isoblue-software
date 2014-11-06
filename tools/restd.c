@@ -390,7 +390,6 @@ static inline void loop_func(int n_fds, fd_set read_fds, fd_set write_fds,
 void *http_worker(void *stuff) {
 	struct arguments *arguments = stuff;
 	CURL *curl;
-	CURLcode res;
 	struct curl_slist *headers = NULL;
 	struct ring_buffer buf;
 	leveldb_iterator_t *db_iter;
@@ -438,7 +437,7 @@ void *http_worker(void *stuff) {
 
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, sp);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cp - sp);
-		res = curl_easy_perform(curl);
+		while(curl_easy_perform(curl) != CURLE_OK);
 		leveldb_iter_destroy(db_iter);
 	}
 
