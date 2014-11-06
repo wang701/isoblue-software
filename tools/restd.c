@@ -27,7 +27,7 @@
  * IN THE SOFTWARE.
  */
 
-#define ISOBLUED_VER	"isoblued - ISOBlue daemon"
+#define ISOBLUED_VER	"restd - ISOBlue REST daemon"
 
 #include <stdio.h>
 #include <stdlib.h>
