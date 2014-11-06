@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <string.h>
 
 #include <argp.h>
 
@@ -64,7 +65,11 @@ static char doc[] = "Connect ISOBlue to IFACE(s), using BUF_FILE as a buffer.";
 static struct argp_option options[] = {
 	{NULL, 0, NULL, 0, "About", -1},
 	{NULL, 0, NULL, 0, "Configuration", 0},
-	{"channel", 'c', "<channel>", 0, "RFCOMM Channel", 0},
+	{"post-url", 'u', "<url>", 0, "URL to which to POST JSON messages", 0},
+	{"content-type", 'c', "<type>", 0, "Content-Type to POST", 0},
+	{"max-messages", 'm', "<count>", 0, "Maximum messages per POST", 0},
+	{"retry-delay", 'r', "<secs>", 0, "Seconds to wait between reties", 0},
+	{"post-delay", 'p', "<secs>", 0, "Seconds to wait between posts", 0},
 	{"buffer-order", 'b', "<order>", 0, "Use a 2^<order> MB buffer", 0},
 	{ 0 }
 };
@@ -72,7 +77,11 @@ struct arguments {
 	char *file;
 	char **ifaces;
 	int nifaces;
-	int channel;
+	char *post_url;
+	char *content_type;
+	int max_messages;
+	int retry_delay;
+	int post_delay;
 	int buf_order;
 };
 static error_t parse_opt(int key, char *arg, struct argp_state *state)
@@ -80,8 +89,24 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 	struct arguments *arguments = state->input;
 
 	switch(key) {
+	case 'u':
+		arguments->post_url = arg;
+		break;
+
 	case 'c':
-		arguments->channel = atoi(arg);
+		arguments->content_type = arg;
+		break;
+
+	case 'm':
+		arguments->max_messages = atoi(arg);
+		break;
+
+	case 'r':
+		arguments->retry_delay = atoi(arg);
+		break;
+
+	case 'p':
+		arguments->post_delay = atoi(arg);
 		break;
 
 	case 'b':
@@ -387,24 +412,39 @@ static inline void loop_func(int n_fds, fd_set read_fds, fd_set write_fds,
 	}
 }
 
+#define CONTENT_TYPE	"Content-Type:"
 void *http_worker(void *stuff) {
 	struct arguments *arguments = stuff;
 	CURL *curl;
 	struct curl_slist *headers = NULL;
 	struct ring_buffer buf;
 	leveldb_iterator_t *db_iter;
+	char *content_type_header;
+	int post_delay, retry_delay;
+	int max_messages;
+
+	post_delay = arguments->post_delay;
+	retry_delay = arguments->retry_delay > 0 ? arguments->retry_delay : 
+		post_delay;
+
+	max_messages = arguments->max_messages;
 
 	ring_buffer_create(&buf, 20 + arguments->buf_order, arguments->file);
 
 	curl = curl_easy_init();
-	curl_easy_setopt(curl, CURLOPT_URL, "http://vip1.ecn.purdue.edu:3000/post");
-	headers = curl_slist_append(headers, "Content-Type: application/json");
+	curl_easy_setopt(curl, CURLOPT_URL, arguments->post_url);
+
+	/* Construct Content-Type header */
+	content_type_header = (char *)malloc(strlen(CONTENT_TYPE " ") +
+			strlen(arguments->content_type));
+	strcpy(content_type_header, CONTENT_TYPE " ");
+	strcat(content_type_header, arguments->content_type);
+	headers = curl_slist_append(headers, content_type_header);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 	while(1) {
 		char *sp, *cp;
-
-		printf("Here\n");
+		int messages = 0;
 
 		pthread_mutex_lock(&send_mutex);
 		pthread_cond_wait(&send_cond, &send_mutex);
@@ -433,13 +473,22 @@ void *http_worker(void *stuff) {
 				*(cp++) = ',';
 				ring_buffer_tail_advance(&buf, len + 1);
 				http_id++;
-			} while(leveldb_iter_valid(db_iter));
+			} while(leveldb_iter_valid(db_iter) &&
+					!(max_messages > 0 && ++messages >= max_messages));
 			*(cp-1) = ']';
 			ring_buffer_tail_advance(&buf, 1);
 
 			curl_easy_setopt(curl, CURLOPT_POSTFIELDS, sp);
 			curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cp - sp);
-			while(curl_easy_perform(curl) != CURLE_OK);
+			while(curl_easy_perform(curl) != CURLE_OK) {
+				if(retry_delay > 0) {
+					sleep(retry_delay);
+				}
+			}
+
+			if(post_delay > 0) {
+				sleep(post_delay);
+			}
 		}
 
 		leveldb_iter_destroy(db_iter);
@@ -462,6 +511,10 @@ int main(int argc, char *argv[]) {
 		"isoblue.log",
 		DEF_IFACES,
 		sizeof(DEF_IFACES) / sizeof(*DEF_IFACES),
+		"http://www.cyrusbowman.com/data/",
+		"application/json",
+		0,
+		0,
 		0,
 		0,
 	};
