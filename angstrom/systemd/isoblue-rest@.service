@@ -1,0 +1,17 @@
+# /etc/systemd/system/isoblue@.service
+
+[Unit]
+Description=ISOBlue REST Daemon POSTing to %I
+After=bluetooth.service isoblue-interfaces.service tmp.mount
+Requires=bluetooth.service isoblue-interfaces.service tmp.mount
+
+[Service]
+ExecStartPre=-/usr/bin/restd --version
+ExecStart=/usr/bin/restd -u %I /tmp/isoblue-rest\@%i.log ib_eng ib_imp
+ExecStopPost=/bin/mv /tmp/isoblue-rest\@%i.log /var/log/isoblue-rest\@%i.log
+Restart=always
+RestartSec=1
+StartLimitInterval=1
+
+[Install]
+WantedBy=multi-user.target
