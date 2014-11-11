@@ -67,6 +67,7 @@ static struct argp_option options[] = {
 	{NULL, 0, NULL, 0, "Configuration", 0},
 	{"post-url", 'u', "<url>", 0, "URL to which to POST JSON messages", 0},
 	{"content-type", 'c', "<type>", 0, "Content-Type to POST", 0},
+	{"authorization-token", 't', "<token>", 0, "Authorization token to use", 0},
 	{"max-messages", 'm', "<count>", 0, "Maximum messages per POST", 0},
 	{"retry-delay", 'r', "<secs>", 0, "Seconds to wait between reties", 0},
 	{"post-delay", 'p', "<secs>", 0, "Seconds to wait between posts", 0},
@@ -79,6 +80,7 @@ struct arguments {
 	int nifaces;
 	char *post_url;
 	char *content_type;
+	char *authorization_token;
 	int max_messages;
 	int retry_delay;
 	int post_delay;
@@ -95,6 +97,10 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 
 	case 'c':
 		arguments->content_type = arg;
+		break;
+
+	case 't':
+		arguments->authorization_token = arg;
 		break;
 
 	case 'm':
@@ -412,14 +418,15 @@ static inline void loop_func(int n_fds, fd_set read_fds, fd_set write_fds,
 	}
 }
 
-#define CONTENT_TYPE	"Content-Type:"
+#define CONTENT_TYPE	"Content-Type"
+#define AUTHORIZATION	"Authorization"
 void *http_worker(void *stuff) {
 	struct arguments *arguments = stuff;
 	CURL *curl;
 	struct curl_slist *headers = NULL;
 	struct ring_buffer buf;
 	leveldb_iterator_t *db_iter;
-	char *content_type_header;
+	char *content_type_header, *authorization_header;
 	int post_delay, retry_delay;
 	int max_messages;
 
@@ -435,11 +442,22 @@ void *http_worker(void *stuff) {
 	curl_easy_setopt(curl, CURLOPT_URL, arguments->post_url);
 
 	/* Construct Content-Type header */
-	content_type_header = (char *)malloc(strlen(CONTENT_TYPE " ") +
+	content_type_header = (char *)malloc(strlen(CONTENT_TYPE ": ") +
 			strlen(arguments->content_type));
-	strcpy(content_type_header, CONTENT_TYPE " ");
+	strcpy(content_type_header, CONTENT_TYPE ": ");
 	strcat(content_type_header, arguments->content_type);
 	headers = curl_slist_append(headers, content_type_header);
+
+	if(arguments->authorization_token != NULL) {
+		/* Construct Authorization header */
+		authorization_header = (char *)malloc(strlen(AUTHORIZATION ": ") +
+				strlen(arguments->authorization_token));
+		strcpy(content_type_header, AUTHORIZATION ": ");
+		strcat(content_type_header, arguments->authorization_token);
+		headers = curl_slist_append(headers, authorization_header);
+	}
+
+	/* Add headers to request */
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 	while(1) {
@@ -513,6 +531,7 @@ int main(int argc, char *argv[]) {
 		sizeof(DEF_IFACES) / sizeof(*DEF_IFACES),
 		"http://www.cyrusbowman.com/data/",
 		"application/json",
+		NULL,
 		0,
 		0,
 		0,
