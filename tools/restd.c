@@ -396,7 +396,7 @@ static inline int read_func(int sock, int iface)
 
 /* Function that does all the work after initialization */
 static inline void loop_func(int n_fds, fd_set read_fds, fd_set write_fds,
-		int *s, int ns, int bt)
+		int *s, int ns)
 {
 	while(1) {
 		fd_set tmp_rfds = read_fds, tmp_wfds = write_fds;
@@ -519,7 +519,6 @@ int main(int argc, char *argv[]) {
 	fd_set read_fds, write_fds;
 	int n_fds;
 
-	int bt;
 	int ns;
 	int *s;
 
@@ -623,7 +622,7 @@ int main(int argc, char *argv[]) {
 
 
 	/* Do socket stuff */
-	loop_func(n_fds, read_fds, write_fds, s, ns, bt);
+	loop_func(n_fds, read_fds, write_fds, s, ns);
 
 	return EXIT_SUCCESS;
 }
