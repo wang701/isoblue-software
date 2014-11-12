@@ -68,6 +68,7 @@ static struct argp_option options[] = {
 	{"post-url", 'u', "<url>", 0, "URL to which to POST JSON messages", 0},
 	{"content-type", 'c', "<type>", 0, "Content-Type to POST", 0},
 	{"authorization-token", 't', "<token>", 0, "Authorization token to use", 0},
+	{"http-header", 'H', "<header>", 0, "HTTP header to use", 0},
 	{"max-messages", 'm', "<count>", 0, "Maximum messages per POST", 0},
 	{"retry-delay", 'r', "<secs>", 0, "Seconds to wait between reties", 0},
 	{"post-delay", 'p', "<secs>", 0, "Seconds to wait between posts", 0},
@@ -81,6 +82,8 @@ struct arguments {
 	char *post_url;
 	char *content_type;
 	char *authorization_token;
+	char **headers;
+	size_t n_headers;
 	int max_messages;
 	int retry_delay;
 	int post_delay;
@@ -101,6 +104,12 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 
 	case 't':
 		arguments->authorization_token = arg;
+		break;
+
+	case 'H':
+		arguments->headers = realloc(arguments->headers,
+				++arguments->n_headers * sizeof(*(arguments->headers)));
+		arguments->headers[arguments->n_headers - 1] = arg;
 		break;
 
 	case 'm':
@@ -457,6 +466,12 @@ void *http_worker(void *stuff) {
 		headers = curl_slist_append(headers, authorization_header);
 	}
 
+	/* Add arbitrary headers */
+	unsigned int i;
+	for(i = 0; i < arguments->n_headers; i++) {
+		headers = curl_slist_append(headers, arguments->headers[i]);
+	}
+
 	/* Add headers to request */
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
@@ -531,6 +546,8 @@ int main(int argc, char *argv[]) {
 		"http://www.cyrusbowman.com/data/",
 		"application/json",
 		NULL,
+		NULL,
+		0,
 		0,
 		0,
 		0,
