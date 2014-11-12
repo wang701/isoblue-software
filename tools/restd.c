@@ -46,6 +46,7 @@
 #include <leveldb/c.h>
 
 #include <curl/curl.h>
+#include <zlib.h>
 #include <pthread.h>
 
 #include "../socketcan-isobus/patched/can.h"
@@ -72,6 +73,7 @@ static struct argp_option options[] = {
 	{"max-messages", 'm', "<count>", 0, "Maximum messages per POST", 0},
 	{"retry-delay", 'r', "<secs>", 0, "Seconds to wait between reties", 0},
 	{"post-delay", 'p', "<secs>", 0, "Seconds to wait between posts", 0},
+	{"gzip-compress", 'g', 0, 0, "gzip compress POST body", 0},
 	{"buffer-order", 'b', "<order>", 0, "Use a 2^<order> MB buffer", 0},
 	{ 0 }
 };
@@ -87,6 +89,7 @@ struct arguments {
 	int max_messages;
 	int retry_delay;
 	int post_delay;
+	bool compression;
 	int buf_order;
 };
 static error_t parse_opt(int key, char *arg, struct argp_state *state)
@@ -122,6 +125,10 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 
 	case 'p':
 		arguments->post_delay = atoi(arg);
+		break;
+
+	case 'g':
+		arguments->compression = true;
 		break;
 
 	case 'b':
@@ -427,8 +434,83 @@ static inline void loop_func(int n_fds, fd_set read_fds, fd_set write_fds,
 	}
 }
 
+/* From:http://www.mattikariluoma.com/files/curl_post_gzip.c */
+#ifndef OS_CODE
+#  define OS_CODE  0x03  /* assume Unix */
+#endif
+#if MAX_MEM_LEVEL >= 8
+#  define DEF_MEM_LEVEL 8
+#else
+#  define DEF_MEM_LEVEL  MAX_MEM_LEVEL
+#endif
+static int gz_magic[2] = {0x1f, 0x8b}; /* gzip magic header */
+// see zlib's compress.c:compress() function for the original of this
+// modified function
+//
+// dest      : destination buffer, malloc'd already
+// destLen   : size of the malloc'd buffer
+// source    : the uncompressed text
+// sourceLen : the size of the uncompressed text
+//
+// this function returns an error code from the zlib library.
+// upon return, dest contains the compressed output, and destLen 
+// contains the size of dest.
+int string_gzip (char *dest, unsigned long *destLen, char *source,
+		unsigned long sourceLen)
+{
+	char *header;
+	
+	sprintf(dest, "%c%c%c%c%c%c%c%c%c%c", gz_magic[0], gz_magic[1],
+			Z_DEFLATED, 0, 0, 0, 0, 0, 0, OS_CODE);
+	
+	header = dest;
+	dest = &dest[10]; // skip ahead of the header
+	*destLen -= 10; // update our available length
+	
+	z_stream stream;
+	int err;
+
+	stream.next_in = (Bytef *)source;
+	stream.avail_in = sourceLen;
+	#ifdef MAXSEG_64K
+		/* Check for source > 64K on 16-bit machine: */
+		if (stream.avail_in != sourceLen)
+			return Z_BUF_ERROR;
+	#endif
+	stream.next_out = (Bytef *)dest;
+	stream.avail_out = *destLen;
+	if (stream.avail_out != *destLen)
+		return Z_BUF_ERROR;
+
+	stream.zalloc = Z_NULL;
+	stream.zfree = Z_NULL;
+	stream.opaque = Z_NULL;
+
+	// instructs zlib not to write a zlib header
+	err = deflateInit2( &stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 
+			-MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY );
+	if (err != Z_OK)
+		return err;
+
+	err = deflate(&stream, Z_FINISH); // Z_FINISH or Z_NO_FLUSH if we have
+	                                  // more input still (we don't)
+	if (err != Z_STREAM_END) {
+		deflateEnd(&stream);
+		return err == Z_OK ? Z_BUF_ERROR : err;
+	}
+	*destLen = stream.total_out;
+
+	err = deflateEnd(&stream);
+	
+	dest = header; // put the header back on
+	*destLen += 10; // update length of our data block
+	
+	return err;
+}
+
 #define CONTENT_TYPE	"Content-Type"
 #define AUTHORIZATION	"Authorization"
+#define GZIP_CONTENT_HEADER	"Content-Encoding: gzip"
 void *http_worker(void *stuff) {
 	struct arguments *arguments = stuff;
 	CURL *curl;
@@ -472,8 +554,14 @@ void *http_worker(void *stuff) {
 		headers = curl_slist_append(headers, arguments->headers[i]);
 	}
 
-	/* Add headers to request */
-	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+	if(arguments->compression) {
+		/* Add content encoding header */
+		headers = curl_slist_append(headers, GZIP_CONTENT_HEADER);
+	} else {
+		/* Add headers to request */
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+	}
 
 	while(1) {
 		char *sp, *cp;
@@ -511,8 +599,30 @@ void *http_worker(void *stuff) {
 			*(cp-1) = ']';
 			ring_buffer_tail_advance(&buf, 1);
 
-			curl_easy_setopt(curl, CURLOPT_POSTFIELDS, sp);
-			curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cp - sp);
+			if(arguments->compression) {
+				size_t compressed_len;
+				static char *compressed_data = NULL;
+				char content_len_buf[32];
+
+				//see zlib's compress.c
+				compressed_len = (cp - sp) * 1.1 + 22;
+
+				compressed_data = realloc(compressed_data,
+						compressed_len * sizeof(char));
+				string_gzip(compressed_data, &compressed_len, sp, cp - sp);
+
+				sprintf(content_len_buf, "Content-Length: %zu", compressed_len);
+				headers = curl_slist_append(headers, content_len_buf);
+				/* Add headers to request */
+				curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, compressed_data);
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, compressed_len);
+			} else {
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, sp);
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cp - sp);
+			}
+
 			while(curl_easy_perform(curl) != CURLE_OK) {
 				if(retry_delay > 0) {
 					sleep(retry_delay);
@@ -551,6 +661,7 @@ int main(int argc, char *argv[]) {
 		0,
 		0,
 		0,
+		false,
 		0,
 	};
 	argp_parse(&argp, argc, argv, 0, 0, &arguments);

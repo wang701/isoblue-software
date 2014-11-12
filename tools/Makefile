@@ -12,7 +12,7 @@ isoblued isoblue_dummy : LDLIBS += -lbluetooth
 isoblued : LDLIBS += -lleveldb
 isoblued : ring_buf.o
 
-restd: LDLIBS += -lleveldb -pthread -lcurl
+restd: LDLIBS += -lleveldb -pthread -lcurl -lz
 restd: ring_buf.o
 
 ring_buf.o : ring_buf.c ring_buf.h
