@@ -558,10 +558,10 @@ void *http_worker(void *stuff) {
 	if(arguments->compression) {
 		/* Add content encoding header */
 		headers = curl_slist_append(headers, GZIP_CONTENT_HEADER);
-	} else {
-		/* Add headers to request */
-		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 	}
+
+	/* Add headers to request */
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 	while(1) {
 		char *sp, *cp;
@@ -602,7 +602,6 @@ void *http_worker(void *stuff) {
 			if(arguments->compression) {
 				size_t compressed_len;
 				static char *compressed_data = NULL;
-				char content_len_buf[32];
 
 				//see zlib's compress.c
 				compressed_len = (cp - sp) * 1.1 + 22;
@@ -610,11 +609,6 @@ void *http_worker(void *stuff) {
 				compressed_data = realloc(compressed_data,
 						compressed_len * sizeof(char));
 				string_gzip(compressed_data, &compressed_len, sp, cp - sp);
-
-				sprintf(content_len_buf, "Content-Length: %zu", compressed_len);
-				headers = curl_slist_append(headers, content_len_buf);
-				/* Add headers to request */
-				curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, compressed_data);
 				curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, compressed_len);
