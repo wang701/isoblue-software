@@ -74,6 +74,7 @@ static struct argp_option options[] = {
 	{"retry-delay", 'r', "<secs>", 0, "Seconds to wait between reties", 0},
 	{"post-delay", 'p', "<secs>", 0, "Seconds to wait between posts", 0},
 	{"gzip-compress", 'g', 0, 0, "gzip compress POST body", 0},
+	{"dont-keep-data", 'd', 0, 0, "Delete messages when they are POSTed", 0},
 	{"buffer-order", 'b', "<order>", 0, "Use a 2^<order> MB buffer", 0},
 	{ 0 }
 };
@@ -90,6 +91,7 @@ struct arguments {
 	int retry_delay;
 	int post_delay;
 	bool compression;
+	bool dont_keep;
 	int buf_order;
 };
 static error_t parse_opt(int key, char *arg, struct argp_state *state)
@@ -129,6 +131,10 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 
 	case 'g':
 		arguments->compression = true;
+		break;
+
+	case 'd':
+		arguments->dont_keep = true;
 		break;
 
 	case 'b':
@@ -190,7 +196,6 @@ leveldb_t *db;
 leveldb_options_t *db_options;
 leveldb_readoptions_t *db_roptions;
 leveldb_writeoptions_t *db_woptions;
-char *db_err = NULL;
 typedef uint32_t db_key_t;
 db_key_t db_id = 1, db_stop = 0, http_id;
 const db_key_t LEVELDB_ID_KEY = 0;
@@ -391,6 +396,7 @@ static inline int read_func(int sock, int iface)
 	*(cp++) = '}';
 
 	/* Put messaged in leveldb */
+	char *db_err = NULL;
 	leveldb_put(db, db_woptions, (char *)&db_id, sizeof(db_id),
 			sp, cp-sp, &db_err);
 	if(db_err) {
@@ -594,6 +600,19 @@ void *http_worker(void *stuff) {
 				*(cp++) = ',';
 				ring_buffer_tail_advance(&buf, len + 1);
 				http_id++;
+
+				/* Remove sent messages from levelDb? */
+				if(arguments->dont_keep) {
+					char *db_err = NULL;
+
+					leveldb_delete(db, db_woptions, (char *)&http_id,
+							sizeof(http_id), &db_err);
+					if(db_err) {
+						fprintf(stderr, "Leveldb write error.\n");
+						leveldb_free(db_err);
+						db_err = NULL;
+					}
+				}
 			} while(leveldb_iter_valid(db_iter) &&
 					!(max_messages > 0 && ++messages >= max_messages));
 			*(cp-1) = ']';
@@ -656,6 +675,7 @@ int main(int argc, char *argv[]) {
 		0,
 		0,
 		false,
+		false,
 		0,
 	};
 	argp_parse(&argp, argc, argv, 0, 0, &arguments);
@@ -707,6 +727,7 @@ int main(int argc, char *argv[]) {
 	db_cmp = leveldb_comparator_create(NULL,
 			leveldb_cmp_destroy, leveldb_cmp_compare, leveldb_cmp_name);
 	leveldb_options_set_comparator(db_options, db_cmp);
+	char *db_err = NULL;
 	db = leveldb_open(db_options, "isoblued_rest_db", &db_err);
 	if(db_err) {
 		fprintf(stderr, "Leveldb open error.\n");
