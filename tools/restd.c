@@ -572,8 +572,8 @@ void *http_worker(void *stuff) {
 		/* Construct Authorization header */
 		authorization_header = (char *)malloc(strlen(AUTHORIZATION ": ") +
 				strlen(arguments->authorization_token));
-		strcpy(content_type_header, AUTHORIZATION ": ");
-		strcat(content_type_header, arguments->authorization_token);
+		strcpy(authorization_header, AUTHORIZATION ": ");
+		strcat(authorization_header, arguments->authorization_token);
 		headers = curl_slist_append(headers, authorization_header);
 	}
 
@@ -591,6 +591,9 @@ void *http_worker(void *stuff) {
 
 	/* Add headers to request */
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+	/* Be verbose */
+	//curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
 	while(1) {
 		char *sp, *cp;
