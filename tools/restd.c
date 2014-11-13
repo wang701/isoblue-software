@@ -34,6 +34,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
+#include <limits.h>
 
 #include <argp.h>
 
@@ -362,6 +363,7 @@ static inline int read_func(int sock, int iface)
 	*(cp++) = 'p';
 	*(cp++) = '"';
 	*(cp++) = ':';
+	/*
 	*(cp++) = '"';
 	*(cp++) = nib2hex(tv.tv_sec >> 28);
 	*(cp++) = nib2hex(tv.tv_sec >> 24);
@@ -378,6 +380,27 @@ static inline int read_func(int sock, int iface)
 	*(cp++) = nib2hex(tv.tv_usec >> 4);
 	*(cp++) = nib2hex(tv.tv_usec);
 	*(cp++) = '"';
+	*/
+	int i;
+	bool leading = true;
+	for(i = 1000000000; i > 0; i /= 10) {
+		uint_fast8_t digit = (tv.tv_sec / i) % 10;
+
+		/* Leave off leading zeros */
+		if(leading && digit == 0) {
+			continue;
+		}
+
+		leading = false;
+		*(cp++) = digit + '0';
+	}
+	*(cp++) = '.';
+	*(cp++) = ((tv.tv_usec / 100000) % 10) + '0';
+	*(cp++) = ((tv.tv_usec / 10000) % 10) + '0';
+	*(cp++) = ((tv.tv_usec / 1000) % 10) + '0';
+	*(cp++) = ((tv.tv_usec / 100) % 10) + '0';
+	*(cp++) = ((tv.tv_usec / 10) % 10) + '0';
+	*(cp++) = ((tv.tv_usec / 1) % 10) + '0';
 
 	*(cp++) = ',';
 
