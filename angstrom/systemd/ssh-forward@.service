@@ -1,0 +1,13 @@
+# /etc/systemd/system/ssh-forward@.service
+
+[Unit]
+Description=Port forward SSH for access from %I
+
+[Service]
+ExecStart=/usr/bin/ssh -NR *:2222:localhost:22 beaglebone@%i
+Restart=always
+RestartSec=1
+StartLimitInterval=1
+
+[Install]
+WantedBy=multi-user.target
