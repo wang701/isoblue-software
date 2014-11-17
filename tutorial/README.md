@@ -148,6 +148,13 @@ $ make
 # ldconfig
 ```
 
+### Fix SSL Certificates ###
+Run the following commands to make SSL find the installed certificates:
+```shell-session
+# mkdir -p /etc/pki/tls/certs/
+# ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
+```
+
 ### TowerTech Patches ###
 At the time this was written,
 the CAN cape needed changes to the kernel and some modules.
