@@ -1,0 +1,15 @@
+# /etc/systemd/system/ntpdate.service
+
+[Unit]
+Description=Network Time Service (one-shot ntpdate mode) (fixed)
+Before=ntpd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ntpdate -b -s -u pool.ntp.org
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
