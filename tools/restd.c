@@ -778,7 +778,12 @@ int main(int argc, char *argv[]) {
 		db_id = *(db_key_t *)read;
 	}
 	printf("starting at db id %d.\n", db_id);
-	http_id = db_id;
+	/* Find where sending left off */
+	leveldb_iterator_t *db_iter = leveldb_create_iterator(db, db_roptions);
+	leveldb_iter_seek_to_first(db_iter);
+	leveldb_iter_next(db_iter);
+	http_id = *(db_key_t*)leveldb_iter_key(db_iter, &read_len);
+	leveldb_iter_destroy(db_iter);
 
 	/* Start HTTP thread */
 	pthread_t http_thread;
