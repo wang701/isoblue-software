@@ -625,14 +625,16 @@ void *http_worker(void *stuff) {
 				leveldb_iter_next(db_iter);
 				*(cp++) = ',';
 				ring_buffer_tail_advance(&buf, len + 1);
-				http_id++;
 
 				/* Remove sent messages from levelDb? */
 				if(arguments->dont_keep) {
+					char *key;
+					size_t klen;
 					char *db_err = NULL;
 
-					leveldb_delete(db, db_woptions, (char *)&http_id,
-							sizeof(http_id), &db_err);
+					key = (char *)leveldb_iter_key(db_iter, &klen);
+					leveldb_delete(db, db_woptions, key, sizeof(db_key_t),
+							&db_err);
 					if(db_err) {
 						fprintf(stderr, "Leveldb delete error:%s\n", db_err);
 						leveldb_free(db_err);
