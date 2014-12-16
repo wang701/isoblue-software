@@ -423,7 +423,7 @@ static inline int read_func(int sock, int iface)
 	leveldb_put(db, db_woptions, (char *)&db_id, sizeof(db_id),
 			sp, cp-sp, &db_err);
 	if(db_err) {
-		fprintf(stderr, "Leveldb write error.\n");
+		fprintf(stderr, "Leveldb write error:%s\n", db_err);
 		leveldb_free(db_err);
 		db_err = NULL;
 		return -1;
@@ -634,7 +634,7 @@ void *http_worker(void *stuff) {
 					leveldb_delete(db, db_woptions, (char *)&http_id,
 							sizeof(http_id), &db_err);
 					if(db_err) {
-						fprintf(stderr, "Leveldb write error.\n");
+						fprintf(stderr, "Leveldb delete error:%s\n", db_err);
 						leveldb_free(db_err);
 						db_err = NULL;
 					}
@@ -756,7 +756,7 @@ int main(int argc, char *argv[]) {
 	char *db_err = NULL;
 	db = leveldb_open(db_options, "isoblued_rest_db", &db_err);
 	if(db_err) {
-		fprintf(stderr, "Leveldb open error.\n");
+		fprintf(stderr, "Leveldb open error:%s\n", db_err);
 		exit(EXIT_FAILURE);
 	}
 	db_woptions = leveldb_writeoptions_create();
@@ -770,7 +770,7 @@ int main(int argc, char *argv[]) {
 		leveldb_put(db, db_woptions, (char *)&LEVELDB_ID_KEY, sizeof(db_key_t),
 				(char *)&db_id, sizeof(db_id), &db_err);
 		if(db_err) {
-			fprintf(stderr, "Leveldb db init error.\n");
+			fprintf(stderr, "Leveldb db init error:%s\n", db_err);
 		} else {
 			printf("Leveldb init new db.\n");
 		}
