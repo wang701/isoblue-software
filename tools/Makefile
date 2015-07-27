@@ -1,5 +1,7 @@
-TOOLS := can_log_raw isoblued isobus_resend
-TEST := sc_mod_test can_stress isoblue_dummy isobus_resend
+# TOOLS := can_log_raw isoblued isobus_resend
+# TEST := sc_mod_test can_stress isoblue_dummy isobus_resend
+TOOLS := can_log_raw
+TEST := sc_mod_test can_stress
 PREFIX := /usr
 CFLAGS := -Wall -Wextra -O3 $(CFLAGS)
 
