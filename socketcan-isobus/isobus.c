@@ -51,7 +51,8 @@
 #include <linux/socket.h>
 #include <linux/if_arp.h>
 #include <linux/skbuff.h>
-#include "patched/can.h" /* #include <linux/can.h> */
+// #include "patched/can.h" /* #include <linux/can.h> */
+#include <linux/can.h> 
 #include <linux/can/core.h>
 #include "isobus.h" /* #include <linux/can/isobus.h> */
 #include <net/sock.h>
@@ -1341,7 +1342,7 @@ static int isobus_init(struct sock *sk)
 	 */
 	ro->name |= ISOBUS_NAME_MAN_MASK;
 	/* Default function to data logger */
-	ro->name |= (130LU << ISOBUS_NAME_FUNC_POS) & ISOBUS_NAME_FUNC_MASK;
+	ro->name |= (130ULL << ISOBUS_NAME_FUNC_POS) & ISOBUS_NAME_FUNC_MASK;
 	/* Default to self-configurable address */
 	ro->name |= ISOBUS_NAME_SC_BIT;
 
