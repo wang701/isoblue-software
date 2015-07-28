@@ -123,6 +123,8 @@ struct canfd_frame {
 
 #define SOL_CAN_BASE 100
 
+typedef unsigned short __kernel_sa_family_t;
+
 /**
  * struct sockaddr_can - the sockaddr structure for CAN sockets
  * @can_family:  address family number AF_CAN.
