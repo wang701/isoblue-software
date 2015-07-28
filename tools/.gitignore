@@ -4,3 +4,6 @@
 /isoblue_dummy
 /can_stress
 /isobus_resend
+
+obj/
+libs/
