@@ -40,8 +40,11 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
  
-#include <linux/can.h>
-#include <linux/can/raw.h>
+// #include <linux/can.h>
+// #include <linux/can/raw.h>
+
+#include "../socketcan-isobus/patched/can.h"
+#include "../socketcan-isobus/patched/raw.h"
  
 void print_frame(FILE *fd, char interface[], struct timeval *ts, 
 		struct can_frame *cf) {
