@@ -37,32 +37,35 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#include <argp.h>
+// #include <argp.h>
 
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
 
-#include <linux/can.h>
-#include <linux/can/raw.h>
+// #include <linux/can.h>
+// #include <linux/can/raw.h>
+
+#include "../socketcan-isobus/patched/can.h"
+#include "../socketcan-isobus/patched/raw.h"
 
 /* argp goodies */
-#ifdef BUILD_NUM
-const char *argp_program_version = CANSTRESS_VER "\n" BUILD_NUM;
-#else
-const char *argp_program_version = CANSTRESS_VER;
-#endif
-const char *argp_program_bug_address = "<bugs@isoblue.org>";
-static char args_doc[] = "IFACE(S)...";
-static char doc[] = "Continually send on IFACE(s) to stress test CAN bus(es).";
-static struct argp_option options[] = {
-	{NULL, 0, NULL, 0, "About", -1},
-	{NULL, 0, NULL, 0, "Configuration", 0},
-	{"count", 'c', "<count>", 0, "Stop after <count> frames", 0},
-	{"length", 'l', "<bytes>", 0, "Send <bytes> bytes of data per frame", 0},
-	{"delay", 'd', "<usecs>", 0, "Put a <usecs> usec delay between frames", 0},
-	{ 0 }
-};
+// #ifdef BUILD_NUM
+// const char *argp_program_version = CANSTRESS_VER "\n" BUILD_NUM;
+// #else
+// const char *argp_program_version = CANSTRESS_VER;
+// #endif
+// const char *argp_program_bug_address = "<bugs@isoblue.org>";
+// static char args_doc[] = "IFACE(S)...";
+// static char doc[] = "Continually send on IFACE(s) to stress test CAN bus(es).";
+// static struct argp_option options[] = {
+// 	{NULL, 0, NULL, 0, "About", -1},
+// 	{NULL, 0, NULL, 0, "Configuration", 0},
+// 	{"count", 'c', "<count>", 0, "Stop after <count> frames", 0},
+// 	{"length", 'l', "<bytes>", 0, "Send <bytes> bytes of data per frame", 0},
+// 	{"delay", 'd', "<usecs>", 0, "Put a <usecs> usec delay between frames", 0},
+// 	{ 0 }
+// };
 struct arguments {
 	char **ifaces;
 	int nifaces;
@@ -71,67 +74,67 @@ struct arguments {
 	int length;
 	unsigned int delay;
 };
-static error_t parse_opt(int key, char *arg, struct argp_state *state)
-{
-	struct arguments *arguments = state->input;
-	error_t ret = 0;
+// static error_t parse_opt(int key, char *arg, struct argp_state *state)
+// {
+// 	struct arguments *arguments = state->input;
+// 	error_t ret = 0;
 
-	switch(key) {
-	case 'c':
-		arguments->count = atoi(arg);
-		arguments->finite = (arguments->count > 0);
-		break;
+// 	switch(key) {
+// 	case 'c':
+// 		arguments->count = atoi(arg);
+// 		arguments->finite = (arguments->count > 0);
+// 		break;
 
-	case 'l':
-		arguments->length = atoi(arg);
-		break;
+// 	case 'l':
+// 		arguments->length = atoi(arg);
+// 		break;
 
-	case 'd':
-		arguments->delay = atoi(arg);
-		break;
+// 	case 'd':
+// 		arguments->delay = atoi(arg);
+// 		break;
 
-	case ARGP_KEY_ARGS:
-		arguments->ifaces = state->argv + state->next;
-		arguments->nifaces = state->argc - state->next;
-		break;
+// 	case ARGP_KEY_ARGS:
+// 		arguments->ifaces = state->argv + state->next;
+// 		arguments->nifaces = state->argc - state->next;
+// 		break;
 
-	case ARGP_KEY_END:
-		if(arguments->nifaces > 1 && arguments->delay > 0) {
-			fprintf(stderr,
-					"Using a delay with multiple ifaces not yet supported.\n");
-			ret = EINVAL;
-		}
-		break;
+// 	case ARGP_KEY_END:
+// 		if(arguments->nifaces > 1 && arguments->delay > 0) {
+// 			fprintf(stderr,
+// 					"Using a delay with multiple ifaces not yet supported.\n");
+// 			ret = EINVAL;
+// 		}
+// 		break;
 
-	default:
-		return ARGP_ERR_UNKNOWN;
-	}
+// 	default:
+// 		return ARGP_ERR_UNKNOWN;
+// 	}
 
-	return errno = ret;
-}
-static char *help_filter(int key, const char *text, void *input)
-{
-	char *buffer = input;
+// 	return errno = ret;
+// }
+// static char *help_filter(int key, const char *text, void *input)
+// {
+// 	char *buffer = input;
 
-	switch(key) {
-	case ARGP_KEY_HELP_HEADER:
-		buffer = malloc(strlen(text)+1);
-		strcpy(buffer, text);
-		return strcat(buffer, ":");
+// 	switch(key) {
+// 	case ARGP_KEY_HELP_HEADER:
+// 		buffer = malloc(strlen(text)+1);
+// 		strcpy(buffer, text);
+// 		return strcat(buffer, ":");
 
-	default:
-		return (char *)text;
-	}
-}
-static struct argp argp = {
-	options,
-	parse_opt,
-	args_doc,
-	doc,
-	NULL,
-	help_filter,
-	NULL
-};
+// 	default:
+// 		return (char *)text;
+// 	}
+// }
+// static struct argp argp = {
+// 	options,
+// 	parse_opt,
+// 	args_doc,
+// 	doc,
+// 	NULL,
+// 	help_filter,
+// 	NULL
+// };
 
 int main(int argc, char *argv[])
 {
@@ -145,16 +148,16 @@ int main(int argc, char *argv[])
 	/* Handle options */
 	struct arguments arguments = {
 		NULL,
-		0,
-		0,
+		1,
+		10,
 		false,
 		8,
 		0,
 	};
-	if(argp_parse(&argp, argc, argv, 0, 0, &arguments)) {
-		perror(NULL);
-		return EXIT_FAILURE;
-	}
+	// if(argp_parse(&argp, argc, argv, 0, 0, &arguments)) {
+	// 	perror(NULL);
+	// 	return EXIT_FAILURE;
+	// }
 	
 	socks = calloc(arguments.nifaces, sizeof(*socks));
 	nums = calloc(arguments.nifaces, sizeof(*nums));
@@ -165,13 +168,13 @@ int main(int argc, char *argv[])
 		struct sockaddr_can addr = { 0 };
 		struct ifreq ifr;
 
-		if((socks[i] = socket(PF_CAN, SOCK_RAW | SOCK_NONBLOCK, CAN_RAW))
+		if((socks[i] = socket(PF_CAN, SOCK_RAW, CAN_RAW))
 				< 0) {
 			perror("socket");
 			return EXIT_FAILURE;
 		}
 
-		strcpy(ifr.ifr_name, arguments.ifaces[i]);
+		strcpy(ifr.ifr_name, argv[1]);
 		ioctl(socks[i], SIOCGIFINDEX, &ifr);
 		addr.can_family  = AF_CAN;
 		addr.can_ifindex = ifr.ifr_ifindex; 
