@@ -14,7 +14,12 @@
 #ifndef _ISOBUS_H_
 #define _ISOBUS_H_
 
+<<<<<<< Updated upstream
 #include "patched/can.h" /* #include <linux/can.h> */
+=======
+#include "patched/can.h"
+// #include <linux/can.h>
+>>>>>>> Stashed changes
 
 #define SOL_CAN_ISOBUS (SOL_CAN_BASE + CAN_ISOBUS)
 

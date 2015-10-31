@@ -51,7 +51,12 @@
 #include <linux/socket.h>
 #include <linux/if_arp.h>
 #include <linux/skbuff.h>
+<<<<<<< Updated upstream
 #include "patched/can.h" /* #include <linux/can.h> */
+=======
+#include "patched/can.h"
+// #include <linux/can.h> 
+>>>>>>> Stashed changes
 #include <linux/can/core.h>
 #include "isobus.h" /* #include <linux/can/isobus.h> */
 #include <net/sock.h>
