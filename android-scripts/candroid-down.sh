@@ -1,12 +1,13 @@
 #!/system/bin/sh
 
-unload_usb_driver(){
-	rmmod usb_8dev
-}
-
-unload_isobus(){
-	rmmod can-isobus
-}
+# don't need it for nexus 9
+# unload_usb_driver(){
+# 	rmmod usb_8dev
+# }
+#
+# unload_isobus(){
+# 	rmmod can-isobus
+# }
 
 down_can(){
 	ip link set down can0
@@ -23,7 +24,7 @@ kill_logger
 echo "logger killed"
 down_can
 echo "can is down"
-unload_usb_driver
-echo "usb_8dev unloaded"
-unload_isobus
-echo "can-isobus unloaded"
+# unload_usb_driver
+# echo "usb_8dev unloaded"
+# unload_isobus
+# echo "can-isobus unloaded"
