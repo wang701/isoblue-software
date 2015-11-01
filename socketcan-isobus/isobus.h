@@ -14,8 +14,8 @@
 #ifndef _ISOBUS_H_
 #define _ISOBUS_H_
 
-/* #include "patched/can.h" */
-#include <linux/can.h>
+#include "patched/can.h"
+// #include <linux/can.h>
 
 #define SOL_CAN_ISOBUS (SOL_CAN_BASE + CAN_ISOBUS)
 

@@ -45,15 +45,16 @@
 
 #include "../socketcan-isobus/patched/can.h"
 #include "../socketcan-isobus/patched/raw.h"
+#include "../socketcan-isobus/isobus.h"
  
 void print_frame(FILE *fd, char interface[], struct timeval *ts, 
-		struct can_frame *cf) {
+		struct isobus_mesg *mesg) {
 	int i;
 
 	/* Output CAN frame */
-	fprintf(fd, "<0x%08x> [%u]", cf->can_id, cf->can_dlc);
-	for(i = 0; i < cf->can_dlc; i++) {
-		fprintf(fd, " %02x", cf->data[i]);
+	fprintf(fd, "<0x%05x> [%01x]", mesg->pgn, mesg->dlen);
+	for(i = 0; i < mesg->dlen; i++) {
+		fprintf(fd, " %02x", mesg->data[i]);
 	}
 	/* Output timestamp and CAN interface */
 	fprintf(fd, "\t%ld.%06ld\t%s\r\n", ts->tv_sec, ts->tv_usec, interface);
@@ -65,44 +66,43 @@ void print_frame(FILE *fd, char interface[], struct timeval *ts,
 int main(int argc, char *argv[]) {
 	int s;
 	struct sockaddr_can addr;
-	can_err_mask_t err_mask;
+	struct iovec iov;
 	struct ifreq ifr;
-	FILE *fo, *fe;
+	FILE *fo;
 
-	if((s = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
+	char ctrlmsg[CMSG_SPACE(sizeof(struct timeval))+CMSG_SPACE(sizeof(__u32))];
+	struct isobus_mesg mesg;
+
+
+	if((s = socket(PF_CAN, SOCK_DGRAM, CAN_ISOBUS)) < 0) {
+		fprintf(stdout, "socket failure\n");
 		return EXIT_FAILURE;
 	}
 
 	/* Listen on all CAN interfaces */
 	addr.can_family  = AF_CAN;
-	addr.can_ifindex = 0; 
+	addr.can_ifindex = 0;
+	addr.can_addr.isobus.addr = ISOBUS_ANY_ADDR;
 
 	if(bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+		fprintf(stdout, "bind failure\n");
 		return EXIT_FAILURE;
 	}
 
-	/* Receive all error frames */
-	err_mask = CAN_ERR_MASK;
-	setsockopt(s, SOL_CAN_RAW, CAN_RAW_ERR_FILTER,
-			&err_mask, sizeof(err_mask));
-
 	/* Timestamp frames */
 	const int val = 1;
+	setsockopt(s, SOL_CAN_ISOBUS, CAN_ISOBUS_DADDR, &val, sizeof(val));
 	setsockopt(s, SOL_SOCKET, SO_TIMESTAMP, &val, sizeof(val));
 
 	/* Log to first argument as a file */
 	if(argc > 1) {
-		fo = fe = fopen(argv[1], "w");
+		fo = fopen(argv[1], "w");
 	} else {
 		fo = stdout;
-		fe = stderr;
 	}
 
 	/* Buffer received CAN frames */
-	struct can_frame cf;
 	struct msghdr msg = { 0 };
-	struct iovec iov = { 0 };
-	char ctrlmsg[CMSG_SPACE(sizeof(struct timeval))];
 
 	/* Construct msghdr to use to recevie messages from socket */
 	msg.msg_name = &addr;
@@ -111,8 +111,8 @@ int main(int argc, char *argv[]) {
 	msg.msg_control = ctrlmsg;
 	msg.msg_controllen = sizeof(ctrlmsg);
 	msg.msg_iovlen = 1;
-	iov.iov_base = &cf;
-	iov.iov_len = sizeof(cf);
+	iov.iov_base = &mesg;
+	iov.iov_len = sizeof(mesg);
 	while(1) {
 		/* Print received CAN frames */
 		if(recvmsg(s, &msg, 0) <= 0) {
@@ -122,9 +122,14 @@ int main(int argc, char *argv[]) {
 
 		/* Find approximate receive time */
 		struct cmsghdr *cmsg;
+		struct sockaddr_can daddr = { 0 };
 		struct timeval tv = { 0 };
 		for(cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
 				cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+			if(cmsg->cmsg_level == SOL_CAN_ISOBUS &&
+				cmsg->cmsg_type == CAN_ISOBUS_DADDR) {
+			memcpy(&daddr, CMSG_DATA(cmsg), sizeof(daddr));
+			}
 			if(cmsg->cmsg_level == SOL_SOCKET &&
 					cmsg->cmsg_type == SO_TIMESTAMP) {
 				memcpy(&tv, CMSG_DATA(cmsg), sizeof(tv));
@@ -136,12 +141,8 @@ int main(int argc, char *argv[]) {
 		ifr.ifr_ifindex = addr.can_ifindex;
 		ioctl(s, SIOCGIFNAME, &ifr);
 
-		/* Print fames to STDOUT, errors to STDERR */
-		if(cf.can_id & CAN_ERR_FLAG) {
-			print_frame(fe, ifr.ifr_name, &tv, &cf);
-		} else {
-			print_frame(fo, ifr.ifr_name, &tv, &cf);
-		}
+		/* Print fames to STDOUT */
+		print_frame(fo, ifr.ifr_name, &tv, &mesg);
 	}
 
 	return EXIT_SUCCESS;
