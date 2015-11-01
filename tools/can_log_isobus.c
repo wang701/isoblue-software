@@ -79,9 +79,12 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
+	strcpy(ifr.ifr_name, argv[1]);
+	ioctl(s, SIOCGIFINDEX, &ifr);
+	
 	/* Listen on all CAN interfaces */
 	addr.can_family  = AF_CAN;
-	addr.can_ifindex = 0;
+	addr.can_ifindex = ifr.ifr_ifindex; 
 	addr.can_addr.isobus.addr = ISOBUS_ANY_ADDR;
 
 	if(bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
