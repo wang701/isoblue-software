@@ -11,7 +11,7 @@
 
 down_can(){
 	ip link set down can0
-	# ip link set down can1
+	ip link set down can1
 }
 
 kill_logger(){

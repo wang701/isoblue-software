@@ -43,8 +43,11 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 
-#include <linux/can.h>
-#include <linux/can/raw.h>
+// #include <linux/can.h>
+// #include <linux/can/raw.h>
+
+#include "../socketcan-isobus/patched/can.h"
+#include "../socketcan-isobus/patched/raw.h"
 
 /* argp goodies */
 #ifdef BUILD_NUM

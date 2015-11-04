@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
  
 #include <net/if.h>
 #include <sys/types.h>
@@ -64,7 +65,8 @@ void print_frame(FILE *fd, char interface[], struct timeval *ts,
 }
 
 int main(int argc, char *argv[]) {
-	int s;
+	int s1;
+	int s2;
 	struct sockaddr_can addr;
 	struct iovec iov;
 	struct ifreq ifr;
@@ -74,21 +76,23 @@ int main(int argc, char *argv[]) {
 	struct isobus_mesg mesg;
 
 
-	if((s = socket(PF_CAN, SOCK_DGRAM, CAN_ISOBUS)) < 0) {
-		fprintf(stdout, "socket failure\n");
+	if(((s1 = socket(PF_CAN, SOCK_DGRAM, CAN_ISOBUS)) < 0 || 
+	   ((s2 = socket(PF_CAN, SOCK_DGRAM, CAN_ISOBUS)) < 0))) {
+		perror("socket");
 		return EXIT_FAILURE;
 	}
 
-	strcpy(ifr.ifr_name, argv[1]);
+	strcpy(ifr.ifr_name, 0);
 	ioctl(s, SIOCGIFINDEX, &ifr);
 	
 	/* Listen on all CAN interfaces */
 	addr.can_family  = AF_CAN;
-	addr.can_ifindex = ifr.ifr_ifindex; 
+	// addr.can_ifindex = ifr.ifr_ifindex; 
+	addr.can_ifindex = 0; 
 	addr.can_addr.isobus.addr = ISOBUS_ANY_ADDR;
 
 	if(bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-		fprintf(stdout, "bind failure\n");
+		perror("bind");
 		return EXIT_FAILURE;
 	}
 
